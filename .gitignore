@@ -8,3 +8,9 @@ venv/
 # Fichiers de cache Python
 __pycache__/
 *.pyc
+
+# Identifiants (contient des mots de passe en clair)
+accounts.csv
+
+# Fichiers système macOS
+.DS_Store
