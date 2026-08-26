@@ -52,13 +52,6 @@ if not st.session_state["logged_in"]:
 else:
     # --- APPLICATION SÉCURISÉE ---
     with st.sidebar:
-        st.write(f"Bienvenue, **{st.session_state['username']}** !")
-        if st.button("Se déconnecter"):
-            st.session_state["logged_in"] = False
-            st.session_state["username"] = ""
-            st.rerun()
-        st.divider()
-
         selected_page = option_menu(
             menu_title="Menu principal",
             options=["Accueil", "Dashboard Vols", "Galerie Photos"],
@@ -83,6 +76,14 @@ else:
             mois_choisis = st.multiselect(
                 "Mois : (vide = tous les mois)", _tous_les_mois, default=[]
             )
+
+        # Bloc compte, affiché en bas du menu (après la navigation et les filtres)
+        st.divider()
+        st.write(f"Bienvenue, **{st.session_state['username']}** !")
+        if st.button("Se déconnecter"):
+            st.session_state["logged_in"] = False
+            st.session_state["username"] = ""
+            st.rerun()
 
     if selected_page == "Accueil":
         st.title("Page d'Accueil Réservée")
