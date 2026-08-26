@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from streamlit_option_menu import option_menu
+from streamlit_echarts import st_echarts
 import os
 
 # --- 1. INITIALISATION DE LA SESSION ---
@@ -123,43 +124,110 @@ else:
 
     elif selected_page == "Dashboard Vols":
         st.title("Dashboard Analyse des Vols")
-        st.subheader("Aperçu des données")
+        st.caption("Trafic aérien mensuel — dataset seaborn 'flights'")
 
         df_flights = load_flights()
-
-        # je choisi une plage d'années.
         annee_min = int(df_flights["year"].min())
         annee_max = int(df_flights["year"].max())
+        tous_les_mois = df_flights["month"].unique().tolist()
 
-        plage_annees = st.slider("Choisissez une plage d'années :", annee_min, annee_max, (annee_min, annee_max))
+        # --- BARRE DE FILTRES ---
+        with st.container(border=True):
+            st.markdown("**Filtres**")
+            filtre_col1, filtre_col2 = st.columns([2, 1])
 
-        # Je crée la liste des mois disponibles, avec "Tous les mois" ajouté en premier
-        mois_disponibles = ["Tous les mois"] + sorted(df_flights["month"].unique().tolist())
+            with filtre_col1:
+                plage_annees = st.slider(
+                    "Plage d'années :", annee_min, annee_max, (annee_min, annee_max)
+                )
+            with filtre_col2:
+                mois_choisis = st.multiselect(
+                    "Mois :", tous_les_mois, default=tous_les_mois
+                )
 
-        # Je crée un menu déroulant pour que l'utilisateur choisisse un mois (ou tous les mois)
-        mois_choisi = st.selectbox("Choisissez un mois :", mois_disponibles)
+        # Je filtre le dataframe selon la plage d'années et les mois sélectionnés
+        df_filtre = df_flights[
+            (df_flights["year"] >= plage_annees[0])
+            & (df_flights["year"] <= plage_annees[1])
+            & (df_flights["month"].isin(mois_choisis))
+        ]
 
-        # Je filtre le dataframe pour ne garder que les lignes dans la plage d'années sélectionnée
-        df_filtre = df_flights[(df_flights["year"] >= plage_annees[0]) & (df_flights["year"] <= plage_annees[1])]
+        if df_filtre.empty:
+            st.warning("Aucune donnée pour cette combinaison de filtres.")
+            st.stop()
 
-        # Je filtre en plus par mois, sauf si l'utilisateur a choisi "Tous les mois"
-        if mois_choisi != "Tous les mois":
-            df_filtre = df_filtre[df_filtre["month"] == mois_choisi]
-
-        # J'affiche le résultat filtré pour vérifier que ça fonctionne
-        st.dataframe(df_filtre)
-
-        # Je calcule le total de passagers sur les données filtrées
+        # --- KPIs ---
         total_passagers = df_filtre["passengers"].sum()
+        moyenne_mensuelle = df_filtre["passengers"].mean()
 
-        # J'affiche ce total sous forme d'indicateur clé (KPI)
-        st.metric(label="Total de passagers sur la période sélectionnée", value=f"{total_passagers:,}")
+        passagers_debut = df_filtre[df_filtre["year"] == plage_annees[0]]["passengers"].sum()
+        passagers_fin = df_filtre[df_filtre["year"] == plage_annees[1]]["passengers"].sum()
+        croissance_periode = (
+            ((passagers_fin - passagers_debut) / passagers_debut) * 100
+            if passagers_debut > 0 and plage_annees[0] != plage_annees[1]
+            else 0
+        )
 
-        # Je regroupe les données filtrées par année pour obtenir le total de passagers par an
-        passagers_par_annee = df_filtre.groupby("year")["passengers"].sum()
+        mois_pic_filtre = df_filtre.groupby("month")["passengers"].mean().idxmax()
 
-        # J'affiche un graphique en ligne montrant l'évolution du nombre de passagers
-        st.line_chart(passagers_par_annee)
+        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+        kpi1.metric("Total passagers", f"{total_passagers:,}")
+        kpi2.metric("Moyenne mensuelle", f"{moyenne_mensuelle:,.0f}")
+        kpi3.metric("Croissance sur la période", f"{croissance_periode:+.0f}%")
+        kpi4.metric("Mois le plus chargé", mois_pic_filtre)
+
+        st.markdown("---")
+
+        # --- GRAPHIQUES CÔTE À CÔTE ---
+        col_evolution, col_saisonnalite = st.columns([1.6, 1])
+
+        with col_evolution:
+            st.markdown("**Évolution du trafic par année**")
+            passagers_par_annee = df_filtre.groupby("year")["passengers"].sum()
+            options_evolution = {
+                "tooltip": {"trigger": "axis"},
+                "xAxis": {
+                    "type": "category",
+                    "data": [str(annee) for annee in passagers_par_annee.index.tolist()],
+                },
+                "yAxis": {"type": "value"},
+                "series": [
+                    {
+                        "data": passagers_par_annee.values.tolist(),
+                        "type": "line",
+                        "smooth": True,
+                        "areaStyle": {},
+                        "name": "Passagers",
+                    }
+                ],
+                "grid": {"left": "10%", "right": "5%", "bottom": "10%", "containLabel": True},
+            }
+            st_echarts(options=options_evolution, height="350px")
+
+        with col_saisonnalite:
+            st.markdown("**Saisonnalité (moyenne par mois)**")
+            moyenne_par_mois = df_filtre.groupby("month")["passengers"].mean().reindex(tous_les_mois).dropna()
+            options_saisonnalite = {
+                "tooltip": {"trigger": "axis"},
+                "xAxis": {
+                    "type": "category",
+                    "data": moyenne_par_mois.index.tolist(),
+                    "axisLabel": {"rotate": 45},
+                },
+                "yAxis": {"type": "value"},
+                "series": [
+                    {
+                        "data": [round(v) for v in moyenne_par_mois.values.tolist()],
+                        "type": "bar",
+                        "name": "Moyenne passagers",
+                        "itemStyle": {"color": "#5470c6"},
+                    }
+                ],
+                "grid": {"left": "10%", "right": "5%", "bottom": "20%", "containLabel": True},
+            }
+            st_echarts(options=options_saisonnalite, height="350px")
+
+        st.markdown("---")
 
         # Je crée une case à cocher pour afficher ou masquer la heatmap
         afficher_heatmap = st.checkbox("Afficher la heatmap passagers par mois et année")
@@ -176,6 +244,10 @@ else:
 
             # J'affiche la figure dans Streamlit
             st.pyplot(fig)
+
+        # Le détail des données brutes reste disponible, mais replié par défaut
+        with st.expander("Voir les données détaillées"):
+            st.dataframe(df_filtre, use_container_width=True)
 
     elif selected_page == "Galerie Photos":
         st.title("Album Photos")
