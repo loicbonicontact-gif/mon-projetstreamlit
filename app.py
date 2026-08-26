@@ -83,7 +83,7 @@ else:
                 "Plage d'années :", _annee_min, _annee_max, (_annee_min, _annee_max)
             )
             mois_choisis = st.multiselect(
-                "Mois :", _tous_les_mois, default=_tous_les_mois
+                "Mois : (vide = tous les mois)", _tous_les_mois, default=[]
             )
 
     if selected_page == "Accueil":
@@ -148,10 +148,12 @@ else:
         tous_les_mois = df_flights["month"].unique().tolist()
 
         # Je filtre le dataframe selon la plage d'années et les mois choisis dans la sidebar
+        # (aucun mois sélectionné = pas de filtre, on garde tous les mois)
+        mois_filtre = mois_choisis if mois_choisis else tous_les_mois
         df_filtre = df_flights[
             (df_flights["year"] >= plage_annees[0])
             & (df_flights["year"] <= plage_annees[1])
-            & (df_flights["month"].isin(mois_choisis))
+            & (df_flights["month"].isin(mois_filtre))
         ]
 
         if df_filtre.empty:

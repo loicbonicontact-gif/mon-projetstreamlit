@@ -12,3 +12,6 @@ __pycache__/
 
 # Fichiers système macOS
 .DS_Store
+
+# Notes de suivi personnelles (pas destinées au dépôt)
+PROGRESS.md
