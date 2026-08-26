@@ -1,7 +1,5 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 from streamlit_option_menu import option_menu
 from streamlit_echarts import st_echarts
 import os
@@ -235,12 +233,43 @@ else:
 
         with col_heatmap:
             st.markdown("**Heatmap passagers (mois × année)**")
-            # Je transforme le dataframe en tableau croisé : lignes = mois, colonnes = année, valeurs = passagers
-            tableau_croise = df_filtre.pivot(index="month", columns="year", values="passengers")
+            # Tableau croisé : lignes = mois (janvier en haut, ECharts empile son axe Y de bas en haut donc on inverse la liste)
+            tableau_croise = df_filtre.pivot(index="month", columns="year", values="passengers").reindex(tous_les_mois)
+            annees_heatmap = [str(a) for a in tableau_croise.columns.tolist()]
+            mois_heatmap = list(reversed(tableau_croise.index.tolist()))
+            tableau_croise = tableau_croise.reindex(mois_heatmap)
 
-            fig, ax = plt.subplots(figsize=(6, 5))
-            sns.heatmap(tableau_croise, annot=True, fmt=".0f", cmap="coolwarm", ax=ax)
-            st.pyplot(fig)
+            donnees_heatmap = []
+            for i, mois in enumerate(mois_heatmap):
+                for j, annee in enumerate(annees_heatmap):
+                    valeur = tableau_croise.iloc[i, j]
+                    if pd.notna(valeur):
+                        donnees_heatmap.append([j, i, round(valeur)])
+
+            options_heatmap = {
+                "tooltip": {"position": "top"},
+                "grid": {"height": "75%", "top": "5%", "left": "18%", "right": "5%"},
+                "xAxis": {"type": "category", "data": annees_heatmap, "splitArea": {"show": True}},
+                "yAxis": {"type": "category", "data": mois_heatmap, "splitArea": {"show": True}},
+                "visualMap": {
+                    "min": 0,
+                    "max": int(df_filtre["passengers"].max()),
+                    "calculable": True,
+                    "orient": "horizontal",
+                    "left": "center",
+                    "bottom": "0%",
+                    "inRange": {"color": ["#DCEEFF", "#5470c6", "#0B3D91"]},
+                },
+                "series": [
+                    {
+                        "name": "Passagers",
+                        "type": "heatmap",
+                        "data": donnees_heatmap,
+                        "label": {"show": True, "fontSize": 9},
+                    }
+                ],
+            }
+            st_echarts(options=options_heatmap, height="380px")
 
         # Le détail des données brutes reste disponible, mais replié par défaut
         with st.expander("Voir les données détaillées"):
