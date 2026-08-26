@@ -279,6 +279,22 @@ else:
         st.title("Album Photos")
         st.write("Voici la galerie multimédia organisée sur 3 colonnes :")
 
+        # Les photos ont des ratios différents : on force une hauteur uniforme
+        # pour que la galerie reste alignée, quelle que soit l'image.
+        st.markdown(
+            """
+            <style>
+            [data-testid="stImage"] img {
+                height: 220px;
+                width: 100%;
+                object-fit: cover;
+                border-radius: 12px;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
         cols = st.columns(3)
         image_files = lister_images()[:3]
         for idx, img_name in enumerate(image_files):
