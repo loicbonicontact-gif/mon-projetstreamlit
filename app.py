@@ -68,6 +68,24 @@ else:
             default_index=0
         )
 
+        # Filtres du Dashboard Vols, affichés uniquement sur cette page
+        plage_annees = None
+        mois_choisis = None
+        if selected_page == "Dashboard Vols":
+            st.divider()
+            st.markdown("**Filtres**")
+            _df_flights_filtres = load_flights()
+            _annee_min = int(_df_flights_filtres["year"].min())
+            _annee_max = int(_df_flights_filtres["year"].max())
+            _tous_les_mois = _df_flights_filtres["month"].unique().tolist()
+
+            plage_annees = st.slider(
+                "Plage d'années :", _annee_min, _annee_max, (_annee_min, _annee_max)
+            )
+            mois_choisis = st.multiselect(
+                "Mois :", _tous_les_mois, default=_tous_les_mois
+            )
+
     if selected_page == "Accueil":
         st.title("Page d'Accueil Réservée")
         st.write("Ce contenu est uniquement accessible aux utilisateurs authentifiés.")
@@ -124,28 +142,12 @@ else:
 
     elif selected_page == "Dashboard Vols":
         st.title("Dashboard Analyse des Vols")
-        st.caption("Trafic aérien mensuel — dataset seaborn 'flights'")
+        st.caption("Trafic aérien mensuel — dataset seaborn 'flights' — filtres dans le menu latéral")
 
         df_flights = load_flights()
-        annee_min = int(df_flights["year"].min())
-        annee_max = int(df_flights["year"].max())
         tous_les_mois = df_flights["month"].unique().tolist()
 
-        # --- BARRE DE FILTRES ---
-        with st.container(border=True):
-            st.markdown("**Filtres**")
-            filtre_col1, filtre_col2 = st.columns([2, 1])
-
-            with filtre_col1:
-                plage_annees = st.slider(
-                    "Plage d'années :", annee_min, annee_max, (annee_min, annee_max)
-                )
-            with filtre_col2:
-                mois_choisis = st.multiselect(
-                    "Mois :", tous_les_mois, default=tous_les_mois
-                )
-
-        # Je filtre le dataframe selon la plage d'années et les mois sélectionnés
+        # Je filtre le dataframe selon la plage d'années et les mois choisis dans la sidebar
         df_filtre = df_flights[
             (df_flights["year"] >= plage_annees[0])
             & (df_flights["year"] <= plage_annees[1])
@@ -156,7 +158,7 @@ else:
             st.warning("Aucune donnée pour cette combinaison de filtres.")
             st.stop()
 
-        # --- KPIs ---
+        # --- LIGNE DE KPIs ---
         total_passagers = df_filtre["passengers"].sum()
         moyenne_mensuelle = df_filtre["passengers"].mean()
 
@@ -178,31 +180,33 @@ else:
 
         st.markdown("---")
 
-        # --- GRAPHIQUES CÔTE À CÔTE ---
-        col_evolution, col_saisonnalite = st.columns([1.6, 1])
+        # --- GRAPHIQUE PRINCIPAL : évolution du trafic, en pleine largeur ---
+        st.markdown("**Évolution du trafic par année**")
+        passagers_par_annee = df_filtre.groupby("year")["passengers"].sum()
+        options_evolution = {
+            "tooltip": {"trigger": "axis"},
+            "xAxis": {
+                "type": "category",
+                "data": [str(annee) for annee in passagers_par_annee.index.tolist()],
+            },
+            "yAxis": {"type": "value"},
+            "series": [
+                {
+                    "data": passagers_par_annee.values.tolist(),
+                    "type": "line",
+                    "smooth": True,
+                    "areaStyle": {},
+                    "name": "Passagers",
+                }
+            ],
+            "grid": {"left": "6%", "right": "3%", "bottom": "10%", "containLabel": True},
+        }
+        st_echarts(options=options_evolution, height="380px")
 
-        with col_evolution:
-            st.markdown("**Évolution du trafic par année**")
-            passagers_par_annee = df_filtre.groupby("year")["passengers"].sum()
-            options_evolution = {
-                "tooltip": {"trigger": "axis"},
-                "xAxis": {
-                    "type": "category",
-                    "data": [str(annee) for annee in passagers_par_annee.index.tolist()],
-                },
-                "yAxis": {"type": "value"},
-                "series": [
-                    {
-                        "data": passagers_par_annee.values.tolist(),
-                        "type": "line",
-                        "smooth": True,
-                        "areaStyle": {},
-                        "name": "Passagers",
-                    }
-                ],
-                "grid": {"left": "10%", "right": "5%", "bottom": "10%", "containLabel": True},
-            }
-            st_echarts(options=options_evolution, height="350px")
+        st.markdown("---")
+
+        # --- GRAPHIQUES SECONDAIRES, CÔTE À CÔTE ---
+        col_saisonnalite, col_heatmap = st.columns(2)
 
         with col_saisonnalite:
             st.markdown("**Saisonnalité (moyenne par mois)**")
@@ -223,26 +227,17 @@ else:
                         "itemStyle": {"color": "#5470c6"},
                     }
                 ],
-                "grid": {"left": "10%", "right": "5%", "bottom": "20%", "containLabel": True},
+                "grid": {"left": "12%", "right": "5%", "bottom": "22%", "containLabel": True},
             }
             st_echarts(options=options_saisonnalite, height="350px")
 
-        st.markdown("---")
-
-        # Je crée une case à cocher pour afficher ou masquer la heatmap
-        afficher_heatmap = st.checkbox("Afficher la heatmap passagers par mois et année")
-
-        if afficher_heatmap:
+        with col_heatmap:
+            st.markdown("**Heatmap passagers (mois × année)**")
             # Je transforme le dataframe en tableau croisé : lignes = mois, colonnes = année, valeurs = passagers
             tableau_croise = df_filtre.pivot(index="month", columns="year", values="passengers")
 
-            # Je crée une figure Matplotlib/Seaborn
-            fig, ax = plt.subplots(figsize=(10, 5))
-
-            # Je dessine la heatmap avec les valeurs affichées et une palette de couleurs
+            fig, ax = plt.subplots(figsize=(6, 5))
             sns.heatmap(tableau_croise, annot=True, fmt=".0f", cmap="coolwarm", ax=ax)
-
-            # J'affiche la figure dans Streamlit
             st.pyplot(fig)
 
         # Le détail des données brutes reste disponible, mais replié par défaut
