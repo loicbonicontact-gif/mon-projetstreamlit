@@ -271,7 +271,6 @@ else:
                 ],
             }
             st_echarts(options=options_heatmap, height="380px")
-
         # Le détail des données brutes reste disponible, mais replié par défaut
         with st.expander("Voir les données détaillées"):
             st.dataframe(df_filtre, use_container_width=True)
